@@ -1,17 +1,37 @@
 # Factura Segura ESI - Hola Mundo (Python)
 
-**Proyecto de ejemplo abierto** para promover el uso del **ESI (External System Integration)** de [Factura Segura](https://facturasegura.com.py), la plataforma oficial de facturación electrónica de Paraguay (SIFEN - DNIT).
+Esta carpeta contiene la **implementación de referencia** del proyecto [Factura Segura ESI – Hola Mundo](..).
 
-Este repositorio contiene ejemplos prácticos y bien documentados en Python para integrarte con la API de Factura Segura de forma segura y siguiendo las mejores prácticas que descubrimos durante pruebas reales.
+**Proyecto de ejemplo abierto** para promover el uso del **ESI (External System Integration)** de [Factura Segura](https://facturasegura.com.py), un proveedor de servicios de facturación electrónica en Paraguay que actúa como intermediario hacia **SIFEN** (Sistema Integrado de Facturación Electrónica Nacional), el sistema oficial del Estado administrado por la DNIT.
+
+Este es el ejemplo más completo y didáctico del repositorio. Sirve como **implementación de referencia y plantilla** para quien quiera crear una implementación en otro lenguaje o plataforma (Node.js, PHP, Go, integraciones con Odoo, ERPNext, etc.).
+
+Cada nuevo subproyecto debería:
+- Seguir el mismo flujo canónico de 6 pasos.
+- Incluir un canary pre-flight como gate.
+- Documentar patrones recomendados y errores comunes.
+- Mantener un nivel de claridad similar al de este README.
+
+Ver también el [README general del proyecto](../README.md) (especialmente las secciones de [Patrones recomendados](../README.md#patrones-recomendados-mejores-prácticas-que-surgieron-de-las-pruebas) y [Errores comunes](../README.md#errores-comunes-faq-rápida)) para entender la visión multi-plataforma y las guías de contribución.
 
 ## 🎯 Objetivo
 
+Este README y los scripts que lo acompañan tienen dos propósitos:
+
 - Facilitar el onboarding de desarrolladores e integradores al ecosistema ESI de Factura Segura.
+- Servir como **plantilla y referencia de calidad** para otras implementaciones dentro de este repositorio multi-plataforma.
+
+Al copiar esta estructura a un nuevo lenguaje o ERP, se espera que el nuevo `README.md` mantenga un nivel similar de claridad, ejemplos prácticos y explicación de patrones (ver también el [README general](../README.md)).
+
 - Proporcionar código listo para copiar, adaptar y usar en producción.
 - Compartir lecciones aprendidas de la documentación oficial + pruebas reales en ambiente de test.
 - Servir como base para proyectos más complejos (facturación masiva, integración con ERPs, etc.).
 
-**Licencia:** Apache License 2.0
+**Licencia:** Apache License 2.0 (ver [LICENSE](../LICENSE) en la raíz del repositorio).
+
+> **Documentación oficial del ESI**  
+> Para solicitar el Manual Técnico completo del ESI y resolver dudas técnicas sobre la integración, escribí a:  
+> **soporte@facturasegura.com.py**
 
 ## 🚀 Inicio Rápido
 
@@ -81,12 +101,23 @@ python examples/test_esi.py --email "$ESI_EMAIL" --password "$ESI_PASSWORD" --re
 python examples/test_esi.py --email "$ESI_EMAIL" --password "$ESI_PASSWORD" --retry --reingreso
 ```
 
+### 6. Ejemplos detallados de llamadas a la API
+
+Para ver los payloads completos de `calcular_de`, `generar_de`, `get_estado_sifen` (incluyendo respuestas reales de diferentes estados) y cómo se ve un reingreso, consulta el archivo:
+
+→ **[Ejemplos de Llamadas a la API](Ejemplos-API.md)**
+
+Este documento es especialmente útil si estás implementando en otro lenguaje y quieres ver exactamente qué JSON se envía y qué se recibe.
+
 **Mejoras implementadas** (basadas en feedback):
 - `BASE_URL` se puede configurar vía variable de entorno (o `.env`) y se centralizó en ambos scripts.
 - Soporte nativo de `.env` con `python-dotenv` (los scripts cargan automáticamente BASE_URL, ESI_EMAIL y ESI_PASSWORD).
 - Mejor manejo de errores de red (timeouts, connection errors, HTTP errors con mensajes claros).
 - `--num-doc` para controlar el número de documento desde línea de comandos (evita hardcode y colisiones).
 - `BASE_URL` centralizado (fácil cambiar entre test y producción).
+
+> **Este README como referencia**  
+> Si estás creando una implementación en otro lenguaje, te recomendamos usar este archivo como ejemplo del nivel de detalle y claridad que se espera en cada subcarpeta. El [README general del proyecto](../README.md) también contiene las secciones de patrones y errores comunes que deberían estar reflejadas (adaptadas) en cada implementación.
 
 ### 6. Polling de estado (útil para monitorear)
 
@@ -103,11 +134,17 @@ El script de polling también respeta `BASE_URL` desde el entorno.
 
 ## 📚 Lecciones Aprendidas de la Documentación y Pruebas Reales
 
+> **Nota**: Los patrones recomendados y la lista de errores comunes también están documentados de forma más general en el [README del proyecto](../README.md#patrones-recomendados-mejores-prácticas-que-surgieron-de-las-pruebas) y en la sección de [Errores comunes](../README.md#errores-comunes-faq-rápida).
+
 ### 1. Autenticación (lo más importante al principio)
 - Se hace un login normal contra `/login?include_auth_token`.
 - El token importante es `authentication_token` (no el csrf_token).
 - Se envía en el header `Authentication-Token` (no Authorization Bearer).
 - El token puede dejar de funcionar después de un tiempo o si cambias la contraseña. Siempre refresca antes de flujos importantes.
+
+**Cómo obtener la documentación oficial del ESI**  
+Para solicitar el Manual Técnico completo y resolver dudas, escribí a:  
+**soporte@facturasegura.com.py**
 
 ### 2. Operaciones principales del ESI
 - **`calcular_de`**: Envías un DE "resumido" (solo datos de entrada). El sistema te devuelve el DE completo con todos los totales, bases gravadas, IVA, etc. calculados según reglas de SIFEN. **Muy recomendado** antes de generar.
@@ -142,12 +179,12 @@ Lo mismo aplica para:
 
 ### 6. Reingreso vs Nuevo Documento
 Según el protocolo de SIFEN:
-- Si un documento es rechazado **y no ha sido inutilizado**, puedes **reingresarlo** usando el **mismo número de documento**.
+- Si un documento es rechazado **y no ha sido inutilizado**, puedes **reingresarlo** usando el **mismo número de documento** (`--retry --reingreso`).
 - El sistema generará un **nuevo CDC**.
 - Para hacer reingreso, usa la misma combinación de timbrado + establecimiento + punto + número de documento.
-- Si quieres "olvidar" el intento anterior, puedes inutilizar el número y usar uno nuevo.
+- Si quieres "olvidar" el intento anterior, avanza al siguiente número (`--retry` sin `--reingreso`).
 
-El script soporta ambos modos mediante `--retry` y `--reingreso`.
+El script de Python implementa ambos comportamientos de forma explícita y es la referencia para cómo debería manejarse esto en otras plataformas.
 
 ### 7. Estados comunes de SIFEN (interpretación práctica)
 - `SOL.APROBACION` / `ENVIADO_A_SIFEN`: Normal justo después de generar. Espera unos segundos/minutos.
@@ -197,10 +234,6 @@ El script acepta los valores también por argumentos de línea de comandos (más
 ## Contribuir
 
 ¡Este proyecto es un punto de partida! Si tienes mejoras, más ejemplos (notas de crédito, remisiones, cancelaciones, inutilizaciones, etc.), o lecciones aprendidas, por favor abre un Pull Request o Issue.
-
-## Licencia
-
-Este proyecto está licenciado bajo la **Apache License 2.0** - ver el archivo [LICENSE](LICENSE) para más detalles.
 
 ## Agradecimientos
 

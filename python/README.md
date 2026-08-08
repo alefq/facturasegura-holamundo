@@ -103,23 +103,24 @@ python examples/test_esi.py --email "$ESI_EMAIL" --password "$ESI_PASSWORD" --re
 
 ### 6. Ejemplos detallados de llamadas a la API
 
-Para ver los payloads completos de `calcular_de`, `generar_de`, `get_estado_sifen` (incluyendo respuestas reales de diferentes estados) y cómo se ve un reingreso, consulta el archivo:
+Para ver los payloads completos de `calcular_de`, `generar_de`, `get_estado_sifen` (incluyendo respuestas reales de diferentes estados), reingreso y **listado de facturas emitidas**, consulta el archivo:
 
 → **[Ejemplos de Llamadas a la API](Ejemplos-API.md)**
 
 Este documento es especialmente útil si estás implementando en otro lenguaje y quieres ver exactamente qué JSON se envía y qué se recibe.
 
 **Mejoras implementadas** (basadas en feedback):
-- `BASE_URL` se puede configurar vía variable de entorno (o `.env`) y se centralizó en ambos scripts.
+- `BASE_URL` se puede configurar vía variable de entorno (o `.env`) y se centralizó en los scripts.
 - Soporte nativo de `.env` con `python-dotenv` (los scripts cargan automáticamente BASE_URL, ESI_EMAIL y ESI_PASSWORD).
 - Mejor manejo de errores de red (timeouts, connection errors, HTTP errors con mensajes claros).
 - `--num-doc` para controlar el número de documento desde línea de comandos (evita hardcode y colisiones).
 - `BASE_URL` centralizado (fácil cambiar entre test y producción).
+- Ejemplo didáctico de **listado de facturas emitidas** (`list_facturas.py` + sección 7 de [Ejemplos-API.md](Ejemplos-API.md)).
 
 > **Este README como referencia**  
 > Si estás creando una implementación en otro lenguaje, te recomendamos usar este archivo como ejemplo del nivel de detalle y claridad que se espera en cada subcarpeta. El [README general del proyecto](../README.md) también contiene las secciones de patrones y errores comunes que deberían estar reflejadas (adaptadas) en cada implementación.
 
-### 6. Polling de estado (útil para monitorear)
+### 7. Polling de estado (útil para monitorear)
 
 ```bash
 python examples/poll_cdc_status.py \
@@ -131,6 +132,25 @@ python examples/poll_cdc_status.py \
 ```
 
 El script de polling también respeta `BASE_URL` desde el entorno.
+
+### 8. Listar facturas emitidas (complemento al ESI)
+
+El flujo canónico del **ESI** (External System Integration) genera y consulta **un** documento (por Código de Control, CDC). Para **listar** los documentos electrónicos (DE) ya emitidos de un emisor se usa la operación `lst_de` en el endpoint **MSF** (`/misife00/v1/msf`), con el mismo `Authentication-Token` del login.
+
+```bash
+# Tabla resumen (página 1, facturas iTiDE=1, RUC del .env o default de prueba)
+python examples/list_facturas.py
+
+# Página concreta + RUC explícito
+python examples/list_facturas.py --ruc 964343 --page 1
+
+# Respuesta JSON completa (útil al portar a otro lenguaje)
+python examples/list_facturas.py --ruc 964343 --page 1 --json
+```
+
+Detalles de payload, respuesta y campos: sección **7** de [Ejemplos-API.md](Ejemplos-API.md).
+
+> **Importante:** `lst_de` **no** forma parte del contrato del Manual Técnico ESI sobre `/misife00/v1/esi`. Es un complemento de consulta. El usuario debe tener permisos sobre `/msf` y sobre el Registro Único de Contribuyente (RUC) emisor.
 
 ## 📚 Lecciones Aprendidas de la Documentación y Pruebas Reales
 
@@ -150,6 +170,11 @@ Para solicitar el Manual Técnico completo y resolver dudas, escribí a:
 - **`calcular_de`**: Envías un DE "resumido" (solo datos de entrada). El sistema te devuelve el DE completo con todos los totales, bases gravadas, IVA, etc. calculados según reglas de SIFEN. **Muy recomendado** antes de generar.
 - **`generar_de`**: Envías el DE completo. El sistema genera el XML, lo firma, genera el KuDE y lo envía a SIFEN.
 - **`get_estado_sifen`**: Consulta el estado actual en SIFEN (Aprobado, Rechazado, SOL.APROBACION, ENVIADO_A_SIFEN, etc.). Muy útil como **canary test**.
+
+### 2.1. Complemento: listar DE emitidos (MSF, no ESI)
+- **`lst_de`** en `POST /misife00/v1/msf`: listado paginado por emisor (`dRucEm`) y tipo (`iTiDE`). Mismo token de login.
+- Sirve para conciliación y para verificar en test “qué hay emitido” sin conocer de antemano el CDC.
+- Ver `examples/list_facturas.py` y la sección 7 de [Ejemplos-API.md](Ejemplos-API.md).
 
 ### 3. El "Canary Test" (nuestra mejor práctica)
 Antes de generar cualquier documento real:
@@ -204,9 +229,11 @@ El script de Python implementa ambos comportamientos de forma explícita y es la
 facturasegura-holamundo/python/
 ├── examples/
 │   ├── test_esi.py              # Script principal (login + flujo completo + reingreso)
-│   └── poll_cdc_status.py       # Polling de estado (útil para monitoreo)
+│   ├── poll_cdc_status.py       # Polling de estado (útil para monitoreo)
+│   └── list_facturas.py         # Listado paginado de DE emitidos (MSF lst_de)
 ├── requirements.txt
 ├── .env.example
+├── Ejemplos-API.md
 ├── README.md
 └── LICENSE
 ```

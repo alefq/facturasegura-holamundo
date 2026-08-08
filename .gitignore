@@ -37,6 +37,8 @@ htmlcov/
 .cache/
 coverage.xml
 *.cover
+*.coveragerc
+nosetests.xml
 .hypothesis/
 
 # --- Empaquetado / build ---
@@ -59,6 +61,8 @@ share/python-wheels/
 MANIFEST
 pip-log.txt
 pip-delete-this-directory.txt
+*.manifest
+*.spec
 
 # --- Jupyter ---
 .ipynb_checkpoints/
@@ -133,6 +137,11 @@ nbproject/
 nbbuild/
 nbdist/
 .nb-gradle/
+
+# Xcode (por si hay tooling macOS)
+xcuserdata/
+*.xcscmblueprint
+*.xccheckout
 
 # --- SO ---
 .DS_Store

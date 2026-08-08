@@ -1,6 +1,6 @@
 # Ejemplos de Llamadas a la API ESI de Factura Segura
 
-Este documento muestra ejemplos reales (con datos de prueba) de las llamadas al endpoint ESI (`/misife00/v1/esi`).
+Este documento muestra ejemplos reales (con datos de prueba) de las llamadas al endpoint ESI (`/misife00/v1/esi`) y, al final, un **complemento** para listar facturas emitidas vía MSF (`/misife00/v1/msf`, operación `lst_de`).
 
 **Base URL de pruebas:** `https://apitest.facturasegura.com.py`
 
@@ -302,11 +302,109 @@ El script de Python lo hace automáticamente cuando se usa la bandera `--retry -
 
 ---
 
+## 7. Listar facturas emitidas (complemento MSF: `lst_de`)
+
+El **ESI** (External System Integration) documentado en el Manual Técnico (`/misife00/v1/esi`) **no** expone una operación de listado de documentos. Para consultar los **documentos electrónicos (DE)** ya emitidos de un emisor se usa el endpoint **MSF** con la operación `lst_de`, reutilizando el mismo header `Authentication-Token` del login.
+
+| Concepto | Valor |
+|----------|--------|
+| Endpoint | `POST /misife00/v1/msf` |
+| Operación | `lst_de` |
+| Autenticación | `Authentication-Token` (mismo del login ESI) |
+| Uso típico | Conciliación, tablero, “¿qué facturas hay en test?” |
+
+**Parámetros:**
+
+| Parámetro | Descripción |
+|-----------|-------------|
+| `dRucEm` | Registro Único de Contribuyente (RUC) del emisor, **sin** dígito verificador |
+| `iTiDE` | Tipo de DE. `1` = factura electrónica (el caso más habitual en este ejemplo) |
+| `page` | Página de resultados (entero positivo). El tamaño de página lo define el servidor |
+
+**Requisitos del usuario:** cuenta activa y permisos para invocar `/misife00/v1/msf` sobre el RUC consultado (en pruebas suele bastar un usuario con rol de cliente de API asociado al emisor). Si el login funciona para ESI pero `lst_de` devuelve 401/403 o `code` negativo, revisá roles y asociación al emisor con soporte de Factura Segura.
+
+```bash
+curl -X POST https://apitest.facturasegura.com.py/misife00/v1/msf \
+  -H "accept: application/json" \
+  -H "Content-Type: application/json" \
+  -H "Authentication-Token: TU_TOKEN" \
+  -d '{
+    "operation": "lst_de",
+    "params": {
+      "dRucEm": "964343",
+      "iTiDE": "1",
+      "page": "1"
+    }
+  }'
+```
+
+**Respuesta de ejemplo (ambiente de TEST, resumida):**
+```json
+{
+  "code": 0,
+  "description": "OK",
+  "operation_info": {
+    "id": "074e5103-d97f-4731-8609-eb715ac3a567"
+  },
+  "results": [
+    {
+      "total": 89,
+      "page": 1,
+      "page_size": 10,
+      "list": [
+        {
+          "id": "4461",
+          "dEst": "001",
+          "dPunExp": "001",
+          "dNumDoc": "1000004",
+          "dFeEmiDe": "2026-06-11T21:33:58",
+          "cdc": "01009643435001001100000412026061110298577961",
+          "dRucRec": "2595733-3",
+          "dNomRec": "Azpa",
+          "estado_sifen": "Aprobado",
+          "desc_sifen": "0260 - Aprobado",
+          "error_sifen": "",
+          "cmoneope": "PYG",
+          "dtotgralope": "27000",
+          "dNumTim": "00964343",
+          "iTiDE": "1",
+          "fch_sifen": "2026-06-11 21:34:04.000",
+          "fch_upd": "2026-06-11 21:34:14.150"
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Campos útiles de cada ítem en `list`:**
+
+| Campo | Significado |
+|-------|-------------|
+| `dNumDoc` | Número de documento |
+| `dEst` / `dPunExp` | Establecimiento y punto de expedición |
+| `cdc` | Código de Control (CDC) del DE |
+| `estado_sifen` | Estado en SIFEN (`Aprobado`, `Rechazado`, `Reingresado`, etc.) |
+| `dtotgralope` | Total de la operación |
+| `dNomRec` / `dRucRec` | Receptor |
+
+**Script de referencia en este repo:**
+
+```bash
+python examples/list_facturas.py --ruc 964343 --page 1
+python examples/list_facturas.py --ruc 964343 --page 1 --json
+```
+
+> **No confundir** con `get_estado_sifen` (consulta **un** CDC conocido vía ESI). `lst_de` es un **listado paginado** de DE del emisor vía MSF.
+
+---
+
 ## Notas importantes
 
 - El campo `operation_info.id` que viene en todas las respuestas es muy útil para debugging con el equipo de soporte de Factura Segura.
 - En ambiente de **TEST** es normal recibir rechazos con prefijo "TEST -". Sirven para validar que la integración está bien hecha.
 - Siempre actualiza `dFeEmiDE` en cada intento (nuevo o reingreso).
+- El listado de facturas (`lst_de`) es una operación **complementaria** al flujo ESI de generación; no reemplaza el canary ni el envío a SIFEN.
 
 ---
 

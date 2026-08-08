@@ -29,7 +29,7 @@ Es el canal oficial para solicitar el acceso a la documentación completa y reso
 |-----------------------|------------------|------------|
 | Python                | [python/](python/) | Disponible |
 
-> **Consejo**: Dentro de la carpeta `python/` encontrarás el archivo **[Ejemplos de Llamadas a la API](python/Ejemplos-API.md)** con los payloads reales de `calcular_de`, `generar_de`, `get_estado_sifen` y reingreso. Es muy útil como referencia cuando estés implementando en otro lenguaje.
+> **Consejo**: Dentro de la carpeta `python/` encontrarás el archivo **[Ejemplos de Llamadas a la API](python/Ejemplos-API.md)** con los payloads reales de `calcular_de`, `generar_de`, `get_estado_sifen`, reingreso y el **listado de facturas emitidas** (`lst_de` vía MSF). Es muy útil como referencia cuando estés implementando en otro lenguaje.
 
 ## Implementaciones planeadas / deseadas
 
@@ -82,6 +82,19 @@ Todos los subproyectos deben seguir este flujo base (con nombres de métodos ada
    - Si se prefiere descartar ese número, se avanza al siguiente (nuevo ingreso).
    - El script de Python soporta ambas modalidades con las flags `--retry` y `--reingreso`.
 
+### Complemento opcional: listar documentos emitidos
+
+El flujo ESI anterior opera sobre **un** documento (generación o consulta por Código de Control, CDC). Para **listar** los documentos electrónicos (DE) de un emisor:
+
+| Ítem | Detalle |
+|------|---------|
+| Endpoint | `POST /misife00/v1/msf` (no es `/misife00/v1/esi`) |
+| Operación | `lst_de` |
+| Parámetros | `dRucEm`, `iTiDE` (p. ej. `1` = factura electrónica), `page` |
+| Token | El mismo `Authentication-Token` del login |
+
+Implementación de referencia: [python/examples/list_facturas.py](python/examples/list_facturas.py) y sección 7 de [python/Ejemplos-API.md](python/Ejemplos-API.md).
+
 ## Patrones recomendados (mejores prácticas que surgieron de las pruebas)
 
 Estos patrones aparecen en todas las implementaciones saludables:
@@ -92,6 +105,7 @@ Estos patrones aparecen en todas las implementaciones saludables:
 - **Manejo explícito de reingreso**: Diferenciar claramente entre "intentar con el mismo número" (`--reingreso`) vs "avanzar al siguiente número".
 - **Validación estricta de datos del emisor**: Especialmente `gActEco` (las descripciones deben ser idénticas a las registradas) y `dFeIniT` del timbrado.
 - **Manejo de estados intermedios**: `SOL.APROBACION` y `ENVIADO_A_SIFEN` son normales. No asumir que un `generar_de` exitoso significa que ya está aprobado.
+- **Listado para conciliación**: cuando hace falta ver “qué hay emitido” sin conocer el CDC, usar `lst_de` en `/misife00/v1/msf` (complemento documentado; no forma parte del contrato ESI del Manual Técnico).
 
 ## Estructura recomendada para nuevas implementaciones
 
@@ -104,7 +118,8 @@ Cada nuevo lenguaje o plataforma debe vivir en su propio subdirectorio y seguir 
 ├── requirements.txt / package.json / composer.json / go.mod ...
 ├── examples/
 │   ├── full_flow.py / index.js / ...
-│   └── poll_status.py / ...
+│   ├── poll_status.py / ...
+│   └── list_invoices.py / ...   # opcional: listado de DE emitidos (MSF lst_de)
 └── src/ (si aplica)
 ```
 
@@ -114,6 +129,7 @@ El `README.md` de cada subcarpeta debe ser **didáctico** (como el de Python), e
 - Las trampas más comunes (descripciones de `gActEco`, fechas de timbrado, etc.)
 - Cómo hacer reingreso
 - Ejemplos de uso del canary pattern
+- (Opcional) Cómo listar DE emitidos con `lst_de` en MSF, dejando claro que no es operación del endpoint ESI
 
 ## Errores comunes (FAQ rápida)
 

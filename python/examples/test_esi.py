@@ -3,8 +3,8 @@
 Ejemplo completo de integración con el API ESI de Factura Segura (SIFEN).
 
 Flujo:
-  0. CANARY PRE-FLIGHT (get_estado_sifen) → Gate de salud antes de generar.
-  1. Login → Obtiene Authentication-Token.
+  0. LOGIN ESI → Pide Authentication-Token. Si falla, no sigue.
+  1. CANARY PRE-FLIGHT (get_estado_sifen) → Gate de salud antes de generar.
   2. calcular_de → Envía datos resumidos, recibe DE completo con cálculos.
   3. generar_de → Envía el DE completo a SIFEN.
   4. CANARY POST (get_estado_sifen) → Verifica el estado del CDC generado.
@@ -12,6 +12,9 @@ Flujo:
 
 Uso básico:
     python examples/test_esi.py --email tu-email@ejemplo.com --password tu-password
+
+Solo el test de login (paso 0, sin canary ni emisión):
+    python examples/test_esi.py --login-only
 
 Reingreso (mismo número de documento):
     python examples/test_esi.py --email ... --password ... --retry --reingreso
@@ -36,16 +39,33 @@ BASE_URL = os.getenv("BASE_URL", "https://apitest.facturasegura.com.py")
 
 
 def login(email: str, password: str) -> str:
-    """Realiza login y devuelve el authentication_token."""
+    """Paso 0. Pide el Authentication-Token. Si falla, termina antes del canary."""
     url = f"{BASE_URL}/login?include_auth_token"
     payload = {"email": email, "password": password}
 
-    resp = requests.post(url, json=payload, timeout=30)
-    resp.raise_for_status()
+    try:
+        resp = requests.post(url, json=payload, timeout=30)
+    except requests.exceptions.Timeout:
+        print("Timeout al hacer login.")
+        sys.exit(1)
+    except requests.exceptions.ConnectionError:
+        print("Error de conexión al hacer login.")
+        sys.exit(1)
 
-    data = resp.json()
-    token = data["response"]["user"]["authentication_token"]
-    print(f"✅ Login exitoso. Token: {token[:30]}...")
+    if resp.status_code != 200:
+        print(f"Login rechazado (HTTP {resp.status_code}).")
+        sys.exit(1)
+
+    try:
+        data = resp.json()
+    except ValueError:
+        print("Login sin respuesta JSON.")
+        sys.exit(1)
+
+    token = ((data.get("response") or {}).get("user") or {}).get("authentication_token")
+    if not token:
+        print("Login sin authentication_token.")
+        sys.exit(1)
     return token
 
 
@@ -62,18 +82,18 @@ def call_esi(token: str, operation: str, params: dict) -> dict:
     try:
         resp = requests.post(url, headers=headers, json=payload, timeout=60)
         if resp.status_code == 401:
-            print("❌ Error de autenticación (401). Verifica tu token o credenciales.")
+            print("Error de autenticación (401). Verifica tu token o credenciales.")
             sys.exit(1)
         resp.raise_for_status()
         return resp.json()
     except requests.exceptions.Timeout:
-        print("❌ Timeout al llamar a la API de Factura Segura.")
+        print("Timeout al llamar a la API de Factura Segura.")
         raise
     except requests.exceptions.ConnectionError:
-        print("❌ Error de conexión con la API de Factura Segura.")
+        print("Error de conexión con la API de Factura Segura.")
         raise
     except requests.exceptions.RequestException as e:
-        print(f"❌ Error de red al llamar '{operation}': {e}")
+        print(f"Error de red al llamar '{operation}': {e}")
         raise
 
 
@@ -163,12 +183,18 @@ def main():
     parser.add_argument("--num-doc", help="Número de documento a usar (7 dígitos, ej: 1000005). Sobrescribe el valor por defecto y se usa para reintentos/reingresos.")
     parser.add_argument("--retry", action="store_true", help="Ejecutar el flujo de generación (con --reingreso para mantener mismo número)")
     parser.add_argument("--reingreso", action="store_true", help="Usar el MISMO número de documento (reingreso SIFEN). Requiere --retry.")
+    parser.add_argument("--login-only", action="store_true", help="Solo el paso 0: test de login del usuario ESI, sin canary ni emisión.")
     args = parser.parse_args()
 
     if not args.email or not args.password:
         parser.error("--email y --password son requeridos (o defínelos en .env como ESI_EMAIL / ESI_PASSWORD)")
 
+    print("\n=== 0. LOGIN ESI ===")
     token = login(args.email, args.password)
+    print(f"Login exitoso. Token: {token[:30]}...")
+    if args.login_only:
+        print("Test de login OK.")
+        return
 
     # Modo solo consulta de estado
     if args.get_estado:
@@ -193,18 +219,18 @@ def main():
             print(f"\n=== MODO REINTENTO: usando número {de_resumido['dNumDoc']} ===")
         de_resumido["dFeEmiDE"] = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
 
-    # === 0. CANARY PRE-FLIGHT (gate) ===
-    print("\n=== 0. CANARY PRE-FLIGHT: get_estado_sifen ===")
+    # === 1. CANARY PRE-FLIGHT (gate), después del login ===
+    print("\n=== 1. CANARY PRE-FLIGHT: get_estado_sifen ===")
     CANARY_CDC = "01009643435001001000003812024070716524190789"
     CANARY_RUC = "964343"
     canary_resp = call_esi(token, "get_estado_sifen", {"CDC": CANARY_CDC, "dRucEm": CANARY_RUC})
     print(json.dumps(canary_resp, indent=2, ensure_ascii=False))
 
     if canary_resp.get("code") != 0:
-        print("❌ Canary pre-flight falló. Abortando.")
+        print("Canary pre-flight falló. Abortando.")
         sys.exit(1)
 
-    print("✅ Canary pre-flight OK. Continuando...\n")
+    print("Canary pre-flight OK. Continuando...\n")
 
     # 2. CALCULAR_DE
     print("=== 2. CALCULAR_DE ===")
@@ -212,7 +238,7 @@ def main():
     print(json.dumps(calc_response, indent=2, ensure_ascii=False))
 
     if calc_response.get("code") != 0:
-        print("❌ Error en calcular_de.")
+        print("Error en calcular_de.")
         sys.exit(1)
 
     # 3. GENERAR_DE
@@ -228,11 +254,11 @@ def main():
     print(json.dumps(gen_response, indent=2, ensure_ascii=False))
 
     if gen_response.get("code") != 0:
-        print(f"❌ generar_de falló: {gen_response.get('description')}")
+        print(f"generar_de falló: {gen_response.get('description')}")
         sys.exit(1)
 
     cdc = gen_response["results"][0]["CDC"]
-    print(f"\n✅ CDC generado: {cdc}")
+    print(f"\nCDC generado: {cdc}")
 
     # 4. CANARY POST
     print("\n=== 4. CANARY POST: get_estado_sifen ===")
@@ -241,13 +267,13 @@ def main():
 
     if status_resp.get("code") == 0:
         estado = status_resp["results"][0].get("estado_sifen", "")
-        print(f"\n📊 Estado: {estado}")
+        print(f"\nEstado: {estado}")
         if "Rechazado" in str(estado) or "ERROR" in str(estado):
-            print("⚠️  Rechazado. Puedes reingresar con el mismo número usando --retry --reingreso")
+            print("Rechazado. Puedes reingresar con el mismo número usando --retry --reingreso")
         elif "Aprobado" in str(estado):
-            print("✅ Documento aprobado.")
+            print("Documento aprobado.")
         else:
-            print("⏳ En procesamiento.")
+            print("En procesamiento.")
 
     print("\n¡Flujo completado!")
 

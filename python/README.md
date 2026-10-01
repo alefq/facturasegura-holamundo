@@ -7,14 +7,14 @@ Esta carpeta contiene la **implementación de referencia** del proyecto [Factura
 Este es el ejemplo más completo y didáctico del repositorio. Sirve como **implementación de referencia y plantilla** para quien quiera crear una implementación en otro lenguaje o plataforma (Node.js, PHP, Go, integraciones con Odoo, ERPNext, etc.).
 
 Cada nuevo subproyecto debería:
-- Seguir el mismo flujo canónico de 6 pasos.
-- Incluir un canary pre-flight como gate.
+- Seguir el mismo flujo canónico, con el test de login del usuario ESI como paso 0, antes del canary.
+- Incluir un canary pre-flight como gate, solo si el login devolvió token.
 - Documentar patrones recomendados y errores comunes.
 - Mantener un nivel de claridad similar al de este README.
 
 Ver también el [README general del proyecto](../README.md) (especialmente las secciones de [Patrones recomendados](../README.md#patrones-recomendados-mejores-prácticas-que-surgieron-de-las-pruebas) y [Errores comunes](../README.md#errores-comunes-faq-rápida)) para entender la visión multi-plataforma y las guías de contribución.
 
-## 🎯 Objetivo
+## Objetivo
 
 Este README y los scripts que lo acompañan tienen dos propósitos:
 
@@ -33,7 +33,7 @@ Al copiar esta estructura a un nuevo lenguaje o ERP, se espera que el nuevo `REA
 > Para solicitar el Manual Técnico completo del ESI y resolver dudas técnicas sobre la integración, escribí a:  
 > **soporte@facturasegura.com.py**
 
-## 🚀 Inicio Rápido
+## Inicio Rápido
 
 ### 1. Clonar el repositorio
 
@@ -76,16 +76,19 @@ python examples/test_esi.py --email "$ESI_EMAIL" --password "$ESI_PASSWORD"
 ```
 
 Este script hace:
-1. Login y obtención de `Authentication-Token`
-2. **Canary pre-flight** (consulta de estado de un CDC conocido) → actúa como "health check" antes de generar nada.
-3. `calcular_de` (envía datos resumidos y recibe el DE completo con todos los totales calculados).
-4. `generar_de` (envía el DE completo, genera XML, firma y envía a SIFEN).
-5. **Canary post** (consulta el estado del CDC recién generado).
-6. Soporte de **reingreso** (mismo número de documento) o nuevo número vía flags.
+0. **Test de login** del usuario ESI (`POST /login?include_auth_token`). Si no devuelve `authentication_token`, se detiene y no llama al canary.
+1. **Canary pre-flight** (consulta de estado de un CDC conocido). Actúa como control de permiso y conectividad antes de generar.
+2. `calcular_de` (envía datos resumidos y recibe el DE completo con todos los totales calculados).
+3. `generar_de` (envía el DE completo, genera XML, firma y envía a SIFEN).
+4. **Canary post** (consulta el estado del CDC recién generado).
+5. Soporte de **reingreso** (mismo número de documento) o nuevo número vía flags.
 
 ### 5. Opciones útiles del script
 
 ```bash
+# Solo el paso 0: test de login, sin canary ni emisión
+python examples/test_esi.py --login-only
+
 # Solo consultar el estado de un CDC (sin generar nada)
 python examples/test_esi.py --email "$ESI_EMAIL" --password "$ESI_PASSWORD" \
   --get-estado 01009643435001001100000222026060612022117504 --dRucEm 964343
@@ -115,7 +118,7 @@ Este documento es especialmente útil si estás implementando en otro lenguaje y
 - Mejor manejo de errores de red (timeouts, connection errors, HTTP errors con mensajes claros).
 - `--num-doc` para controlar el número de documento desde línea de comandos (evita hardcode y colisiones).
 - `BASE_URL` centralizado (fácil cambiar entre test y producción).
-- Ejemplo didáctico de **listado de facturas emitidas** (`list_facturas.py` + sección 7 de [Ejemplos-API.md](Ejemplos-API.md)).
+- Ejemplo didáctico de **listado de facturas emitidas** (`list_facturas.py` + sección 6 de [Ejemplos-API.md](Ejemplos-API.md)).
 
 > **Este README como referencia**  
 > Si estás creando una implementación en otro lenguaje, te recomendamos usar este archivo como ejemplo del nivel de detalle y claridad que se espera en cada subcarpeta. El [README general del proyecto](../README.md) también contiene las secciones de patrones y errores comunes que deberían estar reflejadas (adaptadas) en cada implementación.
@@ -148,19 +151,22 @@ python examples/list_facturas.py --ruc 964343 --page 1
 python examples/list_facturas.py --ruc 964343 --page 1 --json
 ```
 
-Detalles de payload, respuesta y campos: sección **7** de [Ejemplos-API.md](Ejemplos-API.md).
+Detalles de payload, respuesta y campos: sección **6** de [Ejemplos-API.md](Ejemplos-API.md).
 
 > **Importante:** `lst_de` **no** forma parte del contrato del Manual Técnico ESI sobre `/misife00/v1/esi`. Es un complemento de consulta. El usuario debe tener permisos sobre `/msf` y sobre el Registro Único de Contribuyente (RUC) emisor.
 
-## 📚 Lecciones Aprendidas de la Documentación y Pruebas Reales
+## Lecciones Aprendidas de la Documentación y Pruebas Reales
 
 > **Nota**: Los patrones recomendados y la lista de errores comunes también están documentados de forma más general en el [README del proyecto](../README.md#patrones-recomendados-mejores-prácticas-que-surgieron-de-las-pruebas) y en la sección de [Errores comunes](../README.md#errores-comunes-faq-rápida).
 
 ### 1. Autenticación (lo más importante al principio)
-- Se hace un login normal contra `/login?include_auth_token`.
+
+Cuando tu usuario ya está asociado a un RUC en el portal, el token lo pedís vos. El paso a paso está en [TOKEN.md](TOKEN.md).
+
+- El paso 0 es el test de login contra `/login?include_auth_token`. Si no devuelve token, no sigas al canary.
 - El token importante es `authentication_token` (no el csrf_token).
 - Se envía en el header `Authentication-Token` (no Authorization Bearer).
-- El token puede dejar de funcionar después de un tiempo o si cambias la contraseña. Siempre refresca antes de flujos importantes.
+- El token sigue vigente hasta que cambies la contraseña.
 
 **Cómo obtener la documentación oficial del ESI**  
 Para solicitar el Manual Técnico completo y resolver dudas, escribí a:  
@@ -174,7 +180,7 @@ Para solicitar el Manual Técnico completo y resolver dudas, escribí a:
 ### 2.1. Complemento: listar DE emitidos (MSF, no ESI)
 - **`lst_de`** en `POST /misife00/v1/msf`: listado paginado por emisor (`dRucEm`) y tipo (`iTiDE`). Mismo token de login.
 - Sirve para conciliación y para verificar en test “qué hay emitido” sin conocer de antemano el CDC.
-- Ver `examples/list_facturas.py` y la sección 7 de [Ejemplos-API.md](Ejemplos-API.md).
+- Ver `examples/list_facturas.py` y la sección 6 de [Ejemplos-API.md](Ejemplos-API.md).
 
 ### 3. El "Canary Test" (nuestra mejor práctica)
 Antes de generar cualquier documento real:
@@ -234,6 +240,7 @@ facturasegura-holamundo/python/
 ├── requirements.txt
 ├── .env.example
 ├── Ejemplos-API.md
+├── TOKEN.md                   # Token y emisión cuando el RUC ya está asociado
 ├── README.md
 └── LICENSE
 ```
@@ -252,6 +259,7 @@ El script acepta los valores también por argumentos de línea de comandos (más
 ## Consejos de Producción
 
 - Nunca hardcodees credenciales.
+- Corré el test de login (paso 0) antes del canary. Si el login falla, no generes.
 - Usa el canary pre-flight antes de cualquier generación masiva.
 - Maneja reintentos con backoff cuando recibas estados intermedios.
 - Guarda el CDC generado + el response completo para auditoría.
@@ -272,4 +280,4 @@ El script acepta los valores también por argumentos de línea de comandos (más
 **¿Empezando con ESI?**  
 Este repositorio es intencionalmente simple y bien comentado. Lee el código de los ejemplos + este README. Es la forma más rápida de entender cómo funciona realmente la integración.
 
-¡Éxitos con tu integración! Si te sirve, considera darle una estrella al repositorio para que más gente lo encuentre. 🚀
+¡Éxitos con tu integración! Si te sirve, considera darle una estrella al repositorio para que más gente lo encuentre.

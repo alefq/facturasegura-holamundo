@@ -59,28 +59,28 @@ def login(email: str, password: str) -> str:
     try:
         resp = requests.post(url, json=payload, timeout=30)
     except requests.exceptions.Timeout:
-        print("❌ Timeout al hacer login.")
+        print("Timeout al hacer login.")
         raise
     except requests.exceptions.ConnectionError:
-        print("❌ Error de conexión con la API de Factura Segura.")
+        print("Error de conexión con la API de Factura Segura.")
         raise
 
     if resp.status_code == 400:
         try:
             errors = resp.json().get("response", {}).get("errors", [])
-            print(f"❌ Login rechazado: {errors or resp.text}")
+            print(f"Login rechazado: {errors or resp.text}")
         except Exception:
-            print(f"❌ Login rechazado (HTTP 400): {resp.text[:300]}")
+            print(f"Login rechazado (HTTP 400): {resp.text[:300]}")
         sys.exit(1)
 
     if resp.status_code == 401:
-        print("❌ Credenciales inválidas (401).")
+        print("Credenciales inválidas (401).")
         sys.exit(1)
 
     resp.raise_for_status()
     data = resp.json()
     token = data["response"]["user"]["authentication_token"]
-    print(f"✅ Login exitoso. Token: {token[:30]}...")
+    print(f"Login exitoso. Token: {token[:30]}...")
     return token
 
 
@@ -97,21 +97,21 @@ def call_msf(token: str, operation: str, params: dict) -> dict:
     try:
         resp = requests.post(url, headers=headers, json=payload, timeout=60)
         if resp.status_code == 401:
-            print("❌ Error de autenticación (401). Verifica token, rol o permisos MSF.")
+            print("Error de autenticación (401). Verifica token, rol o permisos MSF.")
             sys.exit(1)
         if resp.status_code == 403:
-            print("❌ Acceso denegado (403). El usuario puede no tener rol para /msf.")
+            print("Acceso denegado (403). El usuario puede no tener rol para /msf.")
             sys.exit(1)
         resp.raise_for_status()
         return resp.json()
     except requests.exceptions.Timeout:
-        print("❌ Timeout al llamar a la API de Factura Segura.")
+        print("Timeout al llamar a la API de Factura Segura.")
         raise
     except requests.exceptions.ConnectionError:
-        print("❌ Error de conexión con la API de Factura Segura.")
+        print("Error de conexión con la API de Factura Segura.")
         raise
     except requests.exceptions.RequestException as e:
-        print(f"❌ Error de red al llamar '{operation}': {e}")
+        print(f"Error de red al llamar '{operation}': {e}")
         raise
 
 
@@ -122,7 +122,7 @@ def print_table(page_result: dict) -> None:
     page_size = page_result.get("page_size", 0)
     rows = page_result.get("list") or []
 
-    print(f"\n📄 Total en emisor/tipo: {total}  |  página {page}  |  en esta página: {page_size}\n")
+    print(f"\nTotal en emisor/tipo: {total}  |  página {page}  |  en esta página: {page_size}\n")
     if not rows:
         print("(sin documentos en esta página)")
         return
@@ -230,14 +230,14 @@ def main() -> None:
     print(f"\ncode={code}  description={desc}  operation_info.id={op_id}")
 
     if code != 0:
-        print("❌ lst_de no devolvió code=0. Revisa permisos, RUC o parámetros.")
+        print("lst_de no devolvió code=0. Revisa permisos, RUC o parámetros.")
         if not args.json:
             print(json.dumps(resp, indent=2, ensure_ascii=False))
         sys.exit(1)
 
     results = resp.get("results") or []
     if not results:
-        print("⚠️  results vacío.")
+        print("results vacío.")
         sys.exit(0)
 
     page_result = results[0]
@@ -249,7 +249,7 @@ def main() -> None:
     if total > 0 and page_size > 0 and page * page_size < total:
         next_page = page + 1
         print(
-            f"\n💡 Hay más resultados. Siguiente página: "
+            f"\nHay más resultados. Siguiente página: "
             f"python examples/list_facturas.py --ruc {args.ruc} --i-tide {args.i_tide} --page {next_page}"
         )
 

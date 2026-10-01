@@ -88,10 +88,10 @@ def main():
                 desc = res.get("desc_sifen", "")
                 print(f"[{ts}] {estado}")
                 if desc:
-                    print(f"         {desc}")
+                    print(f"        {desc}")
 
                 if estado in final_states:
-                    print(f"\n✅ Estado final alcanzado: {estado}")
+                    print(f"\nEstado final alcanzado: {estado}")
                     break
             else:
                 print(f"[{ts}] Error en respuesta: {data}")

@@ -9,7 +9,7 @@ Cada implementación (por lenguaje o plataforma) cubre **exactamente el mismo fl
 ## Filosofía del proyecto
 
 - **Un solo flujo canónico** → todas las implementaciones hacen lo mismo.
-- **Canary tests primero** → nunca generes un documento real sin antes validar que tu token y permisos funcionan.
+- **Test de login primero, canary después** → el paso 0 confirma el usuario ESI. Recién entonces el canary valida el token y los permisos. No generes un documento si alguno de los dos falla.
 - **Reingreso vs nuevo documento** → explicamos claramente cuándo usar el mismo `dNumDoc` y cuándo avanzar al siguiente.
 - **Datos que realmente importan** → énfasis en que `gActEco`, fechas de timbrado y datos del emisor deben coincidir **exactamente** con lo registrado en el portal.
 - **Listo para producción** → los ejemplos incluyen manejo de errores, logging claro y estructura que se puede copiar a proyectos reales.
@@ -59,25 +59,25 @@ Es el canal oficial para solicitar el acceso a la documentación completa y reso
 
 Todos los subproyectos deben seguir este flujo base (con nombres de métodos adaptados al lenguaje):
 
-1. **Login**  
-   Obtener el `Authentication-Token` usando `/login?include_auth_token`.
+0. **Test de login del usuario ESI**  
+   `POST /login?include_auth_token` con el correo y la contraseña. Tiene que devolver `response.user.authentication_token`. Si no lo devuelve, el flujo se detiene y no se llama al canary. Cuando el usuario ya está asociado a un RUC, el paso a paso está en [python/TOKEN.md](python/TOKEN.md).
 
-2. **Canary pre-flight** (health-check)  
+1. **Canary pre-flight** (health-check)  
    Antes de generar cualquier documento real, consultar el estado de un CDC conocido (`get_estado_sifen`).  
    Si `code != 0` → abortar. Este paso evita generar documentos cuando hay problemas de token, permisos o conectividad.
 
-3. **`calcular_de`**  
+2. **`calcular_de`**  
    Enviar un DE resumido.  
    La API devuelve el DE completo con todos los cálculos de IVA, bases gravadas, totales, etc. hechos según las reglas de SIFEN.
 
-4. **`generar_de`**  
+3. **`generar_de`**  
    Enviar el DE completo.  
    Factura Segura genera el XML, lo firma, genera el KuDE y lo envía a SIFEN.
 
-5. **Canary post**  
+4. **Canary post**  
    Consultar inmediatamente el estado del CDC recién generado para verificar que llegó a SIFEN (`SOL.APROBACION`, `ENVIADO_A_SIFEN`, etc.).
 
-6. **Reintento / Reingreso** (cuando corresponde)  
+5. **Reintento / Reingreso** (cuando corresponde)  
    - Si el documento queda en estado `Rechazado` y el número **no fue inutilizado**, se puede hacer **reingreso** usando el **mismo `dNumDoc`**.
    - Si se prefiere descartar ese número, se avanza al siguiente (nuevo ingreso).
    - El script de Python soporta ambas modalidades con las flags `--retry` y `--reingreso`.
@@ -93,13 +93,14 @@ El flujo ESI anterior opera sobre **un** documento (generación o consulta por C
 | Parámetros | `dRucEm`, `iTiDE` (p. ej. `1` = factura electrónica), `page` |
 | Token | El mismo `Authentication-Token` del login |
 
-Implementación de referencia: [python/examples/list_facturas.py](python/examples/list_facturas.py) y sección 7 de [python/Ejemplos-API.md](python/Ejemplos-API.md).
+Implementación de referencia: [python/examples/list_facturas.py](python/examples/list_facturas.py) y sección 6 de [python/Ejemplos-API.md](python/Ejemplos-API.md).
 
 ## Patrones recomendados (mejores prácticas que surgieron de las pruebas)
 
 Estos patrones aparecen en todas las implementaciones saludables:
 
-- **Canary pre-flight obligatorio**: Siempre consultar un CDC conocido antes de generar. Es el mejor "smoke test" de token + permisos + conectividad.
+- **Paso 0, test de login**: Antes del canary, el login del usuario ESI tiene que devolver `authentication_token`. Si falla, no se consulta ni se genera.
+- **Canary pre-flight obligatorio**: Después del login, consultar un CDC conocido antes de generar. Comprueba token, permisos y conectividad.
 - **Canary post-generación**: Después de `generar_de`, consultar inmediatamente el estado del CDC. Permite detectar rápido si el documento quedó en `SOL.APROBACION`, `Rechazado`, etc.
 - **Logging del `operation_info.id`**: Cada respuesta trae un `id` único. Guardarlo ayuda muchísimo para debugging con el equipo de soporte.
 - **Manejo explícito de reingreso**: Diferenciar claramente entre "intentar con el mismo número" (`--reingreso`) vs "avanzar al siguiente número".
@@ -124,7 +125,7 @@ Cada nuevo lenguaje o plataforma debe vivir en su propio subdirectorio y seguir 
 ```
 
 El `README.md` de cada subcarpeta debe ser **didáctico** (como el de Python), explicando:
-- Cómo obtener un usuario ESI y autorizarlo
+- Cómo pedir el token cuando el usuario ya está asociado a un RUC ([python/TOKEN.md](python/TOKEN.md)). La asociación la hace el dueño de ese RUC en el portal.
 - El flujo paso a paso con los mismos nombres de operaciones
 - Las trampas más comunes (descripciones de `gActEco`, fechas de timbrado, etc.)
 - Cómo hacer reingreso
@@ -148,6 +149,8 @@ Otros tips:
 
 ## Contribuir
 
+Las instrucciones para un agente que vaya a probar o a sumar un caso están en [AGENTS.md](AGENTS.md). Las reglas enrutadas están en `.agents/rules/`.
+
 1. Forkeá el repo.
 2. Copiá la carpeta `python/` como base (es la implementación de referencia).
 3. Adaptá el código a tu lenguaje/plataforma manteniendo la misma estructura de flujo.
@@ -162,7 +165,7 @@ Si estás empezando una implementación en otro lenguaje, te recomendamos inclui
 
 - Cómo obtener un usuario ESI y pedir autorización (mencionar `soporte@facturasegura.com.py`)
 - Instrucciones claras de instalación y ejecución (con venv o equivalente)
-- Ejemplo de uso del flujo completo (login → canary pre → calcular_de → generar_de → canary post)
+- Ejemplo de uso del flujo completo (paso 0 login → canary pre → calcular_de → generar_de → canary post)
 - Cómo hacer reingreso vs nuevo documento
 - Tabla o lista de los errores comunes que detectaste en tu plataforma
 - Ejemplo de `.env.example`

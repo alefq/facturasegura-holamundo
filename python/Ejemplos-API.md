@@ -11,15 +11,23 @@ Authentication-Token: <tu-token>
 
 ---
 
-## 1. Login (obtener token)
+## 0. Test de login del usuario ESI
+
+Este paso va antes del canary. Si no devuelve `authentication_token`, no llames a `get_estado_sifen` ni generes un documento.
 
 ```bash
-curl -X POST https://apitest.facturasegura.com.py/login?include_auth_token \
+curl -sS -X POST https://apitest.facturasegura.com.py/login?include_auth_token \
   -H "Content-Type: application/json" \
   -d '{
     "email": "tu-email@ejemplo.com",
     "password": "tu-password"
   }'
+```
+
+En el ejemplo de Python:
+
+```bash
+python examples/test_esi.py --login-only
 ```
 
 **Respuesta (resumida):**
@@ -34,13 +42,13 @@ curl -X POST https://apitest.facturasegura.com.py/login?include_auth_token \
 }
 ```
 
-Usa el valor de `authentication_token` en el header `Authentication-Token` de todas las llamadas posteriores.
+Usa el valor de `authentication_token` en el header `Authentication-Token` de todas las llamadas posteriores. El canary (sección 1) usa ese header.
 
 ---
 
-## 2. Canary Pre-Flight (get_estado_sifen)
+## 1. Canary Pre-Flight (get_estado_sifen)
 
-Se recomienda siempre consultar primero un CDC conocido antes de generar documentos reales.
+Este paso va después del test de login. Consultá un CDC conocido antes de generar documentos reales. Si el login no devolvió token, no lo ejecutes.
 
 ```bash
 curl -X POST https://apitest.facturasegura.com.py/misife00/v1/esi \
@@ -88,7 +96,7 @@ curl -X POST https://apitest.facturasegura.com.py/misife00/v1/esi \
 
 ---
 
-## 3. calcular_de (DE resumido)
+## 2. calcular_de (DE resumido)
 
 Envías solo los datos de entrada. La API te devuelve el DE completo con todos los cálculos.
 
@@ -170,7 +178,7 @@ El response contiene el objeto `DE` completo con todos los totales calculados.
 
 ---
 
-## 4. generar_de
+## 3. generar_de
 
 Se envía el objeto `DE` completo que devolvió `calcular_de` (más algunos campos que a veces hay que asegurar).
 
@@ -214,7 +222,7 @@ curl -X POST https://apitest.facturasegura.com.py/misife00/v1/esi \
 
 ---
 
-## 5. get_estado_sifen (consulta de estado)
+## 4. get_estado_sifen (consulta de estado)
 
 ```bash
 curl -X POST https://apitest.facturasegura.com.py/misife00/v1/esi \
@@ -282,7 +290,7 @@ curl -X POST https://apitest.facturasegura.com.py/misife00/v1/esi \
 
 ---
 
-## 6. Reingreso (mismo número de documento)
+## 5. Reingreso (mismo número de documento)
 
 Para reingresar un documento rechazado (mientras no esté inutilizado), se usa el **mismo `dNumDoc`**.
 
@@ -302,7 +310,7 @@ El script de Python lo hace automáticamente cuando se usa la bandera `--retry -
 
 ---
 
-## 7. Listar facturas emitidas (complemento MSF: `lst_de`)
+## 6. Listar facturas emitidas (complemento MSF: `lst_de`)
 
 El **ESI** (External System Integration) documentado en el Manual Técnico (`/misife00/v1/esi`) **no** expone una operación de listado de documentos. Para consultar los **documentos electrónicos (DE)** ya emitidos de un emisor se usa el endpoint **MSF** con la operación `lst_de`, reutilizando el mismo header `Authentication-Token` del login.
 
